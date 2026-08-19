@@ -59,7 +59,12 @@ def get(url, **kw):
 
 
 def dumps_in_range(lo=2013, hi=2024):
-    info = session.get(COLLINFO, timeout=60).json()
+    r = get(COLLINFO)
+    if r is None:
+        sys.exit("ERROR: could not reach index.commoncrawl.org for the dump list. "
+                 "The index host rate-limits/blocks concurrent access; wait a few "
+                 "minutes and retry (keep --workers 1).")
+    info = r.json()
     out = []
     for c in info:
         cid = c["id"]                       # e.g. CC-MAIN-2024-42
@@ -119,11 +124,12 @@ def count_records(text):
     return n
 
 
-def estimate_hits(cdx_api, site):
+def estimate_hits(cdx_api, site, delay=0.0):
     """Estimate # of status-200 text/html captures for `site` in one dump.
 
     Cheap: 2 index requests. Read the CDX page count and multiply by the record
     count on page 0. Self-corrects to 0 for sites a dump did not capture.
+    `delay` sleeps between the two requests to stay under the index rate limit.
     """
     base = {
         "url": site,
@@ -139,6 +145,8 @@ def estimate_hits(cdx_api, site):
         return None
     if num_pages == 0:
         return 0
+    if delay:
+        time.sleep(delay)
     r0 = get(cdx_api, params={**base, "page": 0})
     if r0 is None or r0.status_code != 200:
         return None
@@ -160,7 +168,7 @@ def cmd_survey(args):
     rows = []
     tasks = [(site, cid, cdx) for cid, cdx in dumps for site in sites]
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
-        futs = {ex.submit(estimate_hits, cdx, site): (site, cid)
+        futs = {ex.submit(estimate_hits, cdx, site, args.delay): (site, cid)
                 for site, cid, cdx in tasks}
         bar = tqdm(total=len(futs), desc="surveying", unit="cell")
         running_total = 0
@@ -374,9 +382,13 @@ def main():
     sp = sub.add_parser("survey", help="estimate capture counts per site per year "
                                        "(no download) + heatmap")
     add_common_args(sp)
-    sp.add_argument("--workers", type=int, default=3,
-                    help="concurrent index requests (keep low; index.commoncrawl.org "
-                         "refuses connections if hammered) (default: 3)")
+    sp.add_argument("--workers", type=int, default=1,
+                    help="concurrent index requests. KEEP AT 1: index.commoncrawl.org "
+                         "refuses connections (TCP block, minutes long) even at 3 "
+                         "concurrent. (default: 1)")
+    sp.add_argument("--delay", type=float, default=1.0,
+                    help="seconds to sleep between index requests, to stay under the "
+                         "rate limit (default: 1.0)")
     sp.add_argument("--all-dumps", action="store_true",
                     help="survey every dump; default samples ONE dump per year "
                          "(enough for a per-year histogram, ~10x fewer requests)")

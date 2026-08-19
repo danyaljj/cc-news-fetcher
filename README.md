@@ -50,10 +50,11 @@ Each output line is:
 
 ## Notes & gotchas
 
-- **`index.commoncrawl.org` is aggressively rate-limited.** Too many concurrent
-  requests get your IP temporarily blocked at the TCP level (connection refused,
-  not HTTP 503) for several minutes. Keep index concurrency low (`--workers 3`).
-  The content host `data.commoncrawl.org` is not throttled the same way.
+- **`index.commoncrawl.org` is aggressively rate-limited.** Concurrent requests get
+  your IP temporarily blocked at the TCP level (connection refused, not HTTP 503) for
+  10+ minutes. The survey runs **sequentially by default** (`--workers 1 --delay 1.0`);
+  even 3 concurrent workers re-triggered the block in testing. The content host
+  `data.commoncrawl.org` is not throttled the same way.
 - **Recent dumps (2023+) have few news captures** — many outlets block CommonCrawl's
   crawler via `robots.txt`. Prefer pre-2023 dumps (the defaults use `--hi 2022`).
 - Byte-range WARC fetches return **HTTP 206** — that's expected/success.

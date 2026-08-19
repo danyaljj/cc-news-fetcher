@@ -20,13 +20,17 @@ OUTDIR="${OUTDIR:-corpus}"
 MAX_PER_SITE="${MAX_PER_SITE:-200000}"
 PER_DUMP="${PER_DUMP:-50}"
 LO="${LO:-2013}"
-HI="${HI:-2022}"
+HI="${HI:-2024}"
 SCRIPT="$(dirname "$0")/cc_news_sampler.py"
 
 mkdir -p "$OUTDIR"
 
 # Read non-comment, non-blank site patterns into an array.
-mapfile -t SITES < <(grep -vE '^\s*(#|$)' "$SITES_FILE")
+# (plain while-read loop instead of `mapfile`, which needs bash 4+; macOS ships 3.2)
+SITES=()
+while IFS= read -r line; do
+    SITES+=("$line")
+done < <(grep -vE '^[[:space:]]*(#|$)' "$SITES_FILE")
 N="${#SITES[@]}"
 echo "Sampling $N sites -> $OUTDIR/  (max ${MAX_PER_SITE}/site, years ${LO}-${HI})"
 
